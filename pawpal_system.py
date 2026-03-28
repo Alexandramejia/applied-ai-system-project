@@ -38,8 +38,6 @@ class ConflictType(Enum):
     """Labels what kind of problem was found in a schedule so the right fix can be suggested."""
     TIME_OVERLAP = "time_overlap"
     LOCATION_CLASH = "location_clash"
-    OVER_TIME_BUDGET = "over_time_budget"
-    OVER_COST_BUDGET = "over_cost_budget"
     DUPLICATE_TASK = "duplicate_task"
 
 
@@ -68,16 +66,19 @@ class Task:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     recurrence_group_id: Optional[str] = None
     is_recurring: bool = False
-    frequency: str = ""          # e.g. "daily", "weekly"
+    frequency: str = ""
     location: str = ""
     cost: float = 0.0
     notes: str = ""
     is_complete: bool = False
+    extra_pets: list[Pet] = field(default_factory=list, repr=False)
 
     def get_full_name(self) -> str:
-        return f"{self.name} ({self.category.value})"
+        """Return a display name combining the category and task name."""
+        return f"{self.category.value.capitalize()}: {self.name}"
 
     def mark_complete(self) -> None:
+        """Mark this task as done."""
         self.is_complete = True
 
     def edit(
@@ -88,6 +89,7 @@ class Task:
         location: Optional[str] = None,
         cost: Optional[float] = None,
     ) -> None:
+        """Update whichever fields are provided; leave the rest unchanged."""
         if name is not None:
             self.name = name
         if duration_minutes is not None:
@@ -116,15 +118,19 @@ class Pet:
     _tasks: list[Task] = field(default_factory=list, repr=False)
 
     def get_full_name(self) -> str:
+        """Return the pet's full name."""
         return f"{self.first_name} {self.last_name}"
 
     def add_task(self, task: Task) -> None:
+        """Add a care task to this pet."""
         self._tasks.append(task)
 
     def remove_task(self, task_id: str) -> None:
+        """Remove the task with the given id from this pet's list."""
         self._tasks = [t for t in self._tasks if t.id != task_id]
 
     def get_tasks(self) -> list[Task]:
+        """Return all tasks assigned to this pet."""
         return list(self._tasks)
 
 
@@ -144,15 +150,19 @@ class Owner:
     _pets: list[Pet] = field(default_factory=list, repr=False)
 
     def get_full_name(self) -> str:
+        """Return the owner's full name."""
         return f"{self.first_name} {self.last_name}"
 
     def add_pet(self, pet: Pet) -> None:
+        """Add a pet to this owner's list."""
         self._pets.append(pet)
 
     def remove_pet(self, pet_id: str) -> None:
+        """Remove the pet with the given id from this owner's list."""
         self._pets = [p for p in self._pets if p.id != pet_id]
 
     def get_pets(self) -> list[Pet]:
+        """Return all pets belonging to this owner."""
         return list(self._pets)
 
 
@@ -165,15 +175,23 @@ class ScheduleItem:
     task: Task
     pet: Pet
     order: int
-    time_slot: str        # e.g. "9:00 AM"
+    time_slot: str
     why_chosen: str
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    extra_pets: list[Pet] = field(default_factory=list, repr=False)
+
+    def get_all_pets(self) -> list[Pet]:
+        """Return the primary pet plus any extra pets sharing this task."""
+        return [self.pet] + self.extra_pets
 
     def summarize(self) -> str:
+        """Return a one-line description of this schedule entry, listing all pets."""
+        status = "✓" if self.task.is_complete else "○"
+        pet_names = " & ".join(p.get_full_name() for p in self.get_all_pets())
         return (
-            f"{self.order}. [{self.time_slot}] {self.task.name} "
-            f"for {self.pet.get_full_name()} "
-            f"({self.task.duration_minutes} min, ${self.task.cost:.2f}) — {self.why_chosen}"
+            f"{self.order}. [{status}] {self.time_slot} — "
+            f"{self.task.get_full_name()} for {pet_names} "
+            f"({self.task.duration_minutes} min, ${self.task.cost:.2f})"
         )
 
 
@@ -189,14 +207,26 @@ class ScheduleConflict:
     involved_items: list[ScheduleItem] = field(default_factory=list)
 
     def suggest_fix(self) -> str:
-        fixes = {
-            ConflictType.TIME_OVERLAP: "Shift one task to a different time slot.",
-            ConflictType.LOCATION_CLASH: "Reorder tasks so location changes are minimised.",
-            ConflictType.OVER_TIME_BUDGET: "Remove lowest-priority tasks to fit within available time.",
-            ConflictType.OVER_COST_BUDGET: "Remove highest-cost tasks or replace with free alternatives.",
-            ConflictType.DUPLICATE_TASK: "Remove the duplicate task entry.",
-        }
-        return fixes.get(self.conflict_type, "Review the schedule manually.")
+        """Return a plain-English suggestion for resolving this conflict."""
+        if self.conflict_type == ConflictType.TIME_OVERLAP:
+            names = " and ".join(i.task.get_full_name() for i in self.involved_items)
+            return (
+                f"Reschedule one of the overlapping tasks ({names}) to a different "
+                f"time slot, or shorten its duration."
+            )
+        if self.conflict_type == ConflictType.LOCATION_CLASH:
+            names = " and ".join(i.task.get_full_name() for i in self.involved_items)
+            return (
+                f"Tasks {names} share the same time slot but require different "
+                f"locations. Move one of them to an earlier or later slot."
+            )
+        if self.conflict_type == ConflictType.DUPLICATE_TASK:
+            names = " and ".join(i.task.get_full_name() for i in self.involved_items)
+            return (
+                f"Duplicate task detected ({names}). Remove one occurrence or "
+                f"adjust its recurrence settings."
+            )
+        return "Review the conflicting items and adjust the schedule manually."
 
 
 @dataclass
@@ -213,32 +243,44 @@ class Schedule:
     conflicts: list[ScheduleConflict] = field(default_factory=list)
 
     def add_item(self, item: ScheduleItem) -> None:
+        """Append a ScheduleItem to this schedule."""
         self.items.append(item)
 
     def get_total_duration(self) -> int:
-        return sum(i.task.duration_minutes for i in self.items)
+        """Return the sum of all task durations in minutes."""
+        return sum(item.task.duration_minutes for item in self.items)
 
     def get_total_cost(self) -> float:
-        return sum(i.task.cost for i in self.items)
+        """Return the total cost of all scheduled tasks."""
+        return sum(item.task.cost for item in self.items)
 
     def has_conflicts(self) -> bool:
+        """Return True if any conflicts were detected."""
         return len(self.conflicts) > 0
 
     def display(self) -> str:
+        """Return a formatted plain-text view of the full daily schedule."""
         lines = [
-            f"Schedule for {self.date}",
-            f"Total time: {self.get_total_duration()} min | Total cost: ${self.get_total_cost():.2f}",
+            f"=== PawPal+ Schedule for {self.date} ===",
             "",
         ]
-        for item in self.items:
-            lines.append(item.summarize())
-        if self.conflicts:
-            lines.append("\nConflicts:")
-            for c in self.conflicts:
-                lines.append(f"  [{c.conflict_type.value}] {c.message}")
-                lines.append(f"    Fix: {c.suggest_fix()}")
+        if not self.items:
+            lines.append("No tasks scheduled for today.")
+        else:
+            for item in self.items:
+                lines.append(item.summarize())
+        lines += [
+            "",
+            f"Total time : {self.get_total_duration()} min",
+            f"Total cost : ${self.get_total_cost():.2f}",
+        ]
+        if self.has_conflicts():
+            lines += ["", "--- Conflicts ---"]
+            for conflict in self.conflicts:
+                lines.append(f"  [{conflict.conflict_type.value}] {conflict.message}")
+                lines.append(f"  Fix: {conflict.suggest_fix()}")
         if self.reasoning:
-            lines.append(f"\nReasoning: {self.reasoning}")
+            lines += ["", "--- Reasoning ---", self.reasoning]
         return "\n".join(lines)
 
 
@@ -254,86 +296,99 @@ class TaskManager:
     Recurring tasks are linked by a shared recurrence_group_id.
     """
 
-    def _all_tasks(self, owner: Owner) -> list[tuple[Pet, Task]]:
-        pairs = []
-        for pet in owner.get_pets():
-            for task in pet.get_tasks():
-                pairs.append((pet, task))
-        return pairs
+    def __init__(self, tasks: list[Task]) -> None:
+        """Accept a shared mutable task list that all manager methods operate on."""
+        self._tasks = tasks
 
-    # --- Delete ---
+    # --- helpers ---
 
-    def delete_single(self, owner: Owner, task_id: str) -> None:
-        for pet in owner.get_pets():
-            pet.remove_task(task_id)
+    def _find(self, task_id: str) -> Optional[Task]:
+        for t in self._tasks:
+            if t.id == task_id:
+                return t
+        return None
 
-    def delete_this_and_future(self, owner: Owner, task_id: str) -> None:
-        all_tasks = self._all_tasks(owner)
-        # Find the target task and its recurrence group
-        target = next((t for _, t in all_tasks if t.id == task_id), None)
-        if target is None or not target.recurrence_group_id:
-            self.delete_single(owner, task_id)
+    def _group_members(self, recurrence_group_id: str) -> list[Task]:
+        return [t for t in self._tasks if t.recurrence_group_id == recurrence_group_id]
+
+    # --- delete ---
+
+    def delete_single(self, task_id: str) -> None:
+        """Remove exactly the one task with this id."""
+        task = self._find(task_id)
+        if task:
+            self._tasks.remove(task)
+
+    def delete_this_and_future(self, task_id: str) -> None:
+        """Remove the specified task and all later tasks sharing its recurrence group."""
+        task = self._find(task_id)
+        if task is None:
             return
-        # Collect group tasks; those at or after the target index are removed
-        group = [(p, t) for p, t in all_tasks if t.recurrence_group_id == target.recurrence_group_id]
-        target_index = next(i for i, (_, t) in enumerate(group) if t.id == task_id)
-        for pet, task in group[target_index:]:
-            pet.remove_task(task.id)
-
-    def delete_all_recurring(self, owner: Owner, recurrence_group_id: str) -> None:
-        for pet in owner.get_pets():
-            ids_to_remove = [t.id for t in pet.get_tasks() if t.recurrence_group_id == recurrence_group_id]
-            for tid in ids_to_remove:
-                pet.remove_task(tid)
-
-    # --- Edit ---
-
-    def edit_single(self, owner: Owner, task_id: str, changes: dict) -> None:
-        for _, task in self._all_tasks(owner):
-            if task.id == task_id:
-                task.edit(**changes)
-                return
-
-    def edit_this_and_future(self, owner: Owner, task_id: str, changes: dict) -> None:
-        all_tasks = self._all_tasks(owner)
-        target = next((t for _, t in all_tasks if t.id == task_id), None)
-        if target is None or not target.recurrence_group_id:
-            self.edit_single(owner, task_id, changes)
+        if task.recurrence_group_id is None:
+            self._tasks.remove(task)
             return
-        group = [t for _, t in all_tasks if t.recurrence_group_id == target.recurrence_group_id]
-        target_index = next(i for i, t in enumerate(group) if t.id == task_id)
-        for task in group[target_index:]:
+        # Collect the target task index, then remove it and all later group members.
+        target_index = self._tasks.index(task)
+        to_remove = [
+            t for i, t in enumerate(self._tasks)
+            if t.recurrence_group_id == task.recurrence_group_id and i >= target_index
+        ]
+        for t in to_remove:
+            self._tasks.remove(t)
+
+    def delete_all_recurring(self, recurrence_group_id: str) -> None:
+        """Remove every task that belongs to the given recurrence group."""
+        to_remove = self._group_members(recurrence_group_id)
+        for t in to_remove:
+            self._tasks.remove(t)
+
+    # --- edit ---
+
+    def edit_single(self, task_id: str, changes: dict) -> None:
+        """Apply changes to exactly the one task with this id."""
+        task = self._find(task_id)
+        if task:
             task.edit(**changes)
 
-    def edit_all_recurring(self, owner: Owner, recurrence_group_id: str, changes: dict) -> None:
-        for _, task in self._all_tasks(owner):
-            if task.recurrence_group_id == recurrence_group_id:
-                task.edit(**changes)
+    def edit_this_and_future(self, task_id: str, changes: dict) -> None:
+        """Apply changes to the specified task and all later tasks in its recurrence group."""
+        task = self._find(task_id)
+        if task is None:
+            return
+        if task.recurrence_group_id is None:
+            task.edit(**changes)
+            return
+        target_index = self._tasks.index(task)
+        for i, t in enumerate(self._tasks):
+            if t.recurrence_group_id == task.recurrence_group_id and i >= target_index:
+                t.edit(**changes)
+
+    def edit_all_recurring(self, recurrence_group_id: str, changes: dict) -> None:
+        """Apply changes to every task in the given recurrence group."""
+        for t in self._group_members(recurrence_group_id):
+            t.edit(**changes)
 
 
 # ---------------------------------------------------------------------------
 # Scheduler — builds a daily Schedule from an Owner's pets and tasks
 # ---------------------------------------------------------------------------
 
-_PRIORITY_ORDER = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
-
-# Rough start time by task category (24-hour clock, minutes from midnight)
-_CATEGORY_START = {
-    TaskCategory.FEEDING:    7 * 60,
-    TaskCategory.MEDICATION: 8 * 60,
-    TaskCategory.WALK:       9 * 60,
-    TaskCategory.VET:        10 * 60,
-    TaskCategory.GROOMING:   11 * 60,
-    TaskCategory.ENRICHMENT: 14 * 60,
-    TaskCategory.OTHER:      15 * 60,
+# Default start times assigned per task category.
+_CATEGORY_TIME_SLOTS: dict[TaskCategory, str] = {
+    TaskCategory.MEDICATION:  "07:00",
+    TaskCategory.FEEDING:     "08:00",
+    TaskCategory.WALK:        "09:00",
+    TaskCategory.VET:         "10:00",
+    TaskCategory.GROOMING:    "11:00",
+    TaskCategory.OTHER:       "13:00",
+    TaskCategory.ENRICHMENT:  "15:00",
 }
 
-
-def _minutes_to_time_slot(minutes: int) -> str:
-    h, m = divmod(minutes, 60)
-    suffix = "AM" if h < 12 else "PM"
-    h12 = h if 1 <= h <= 12 else (12 if h == 0 else h - 12)
-    return f"{h12}:{m:02d} {suffix}"
+_PRIORITY_ORDER: dict[Priority, int] = {
+    Priority.HIGH:   0,
+    Priority.MEDIUM: 1,
+    Priority.LOW:    2,
+}
 
 
 class Scheduler:
@@ -345,133 +400,197 @@ class Scheduler:
     of every decision it made.
     """
 
-    def rank_by_priority(self, tasks: list[Task]) -> list[Task]:
-        return sorted(tasks, key=lambda t: _PRIORITY_ORDER[t.priority])
+    def generate_plan(self, owner: Owner) -> Schedule:
+        """Collect, rank, filter, and slot all pet tasks into a Schedule for today."""
+        today = date.today()
+        schedule = Schedule(date=today)
+        reasoning_parts: list[str] = []
 
-    def fit_to_time(self, tasks: list[Task], available_minutes: int) -> list[Task]:
-        selected, total = [], 0
-        for task in tasks:
-            if total + task.duration_minutes <= available_minutes:
-                selected.append(task)
-                total += task.duration_minutes
-        return selected
-
-    def fit_to_budget(self, tasks: list[Task], max_budget: float) -> list[Task]:
-        selected, total = [], 0.0
-        for task in tasks:
-            if total + task.cost <= max_budget:
-                selected.append(task)
-                total += task.cost
-        return selected
-
-    def detect_conflicts(self, schedule: Schedule, owner: Owner) -> list[ScheduleConflict]:
-        conflicts = []
-
-        # Over-time check
-        if schedule.get_total_duration() > owner.available_minutes_per_day:
-            conflicts.append(ScheduleConflict(
-                conflict_type=ConflictType.OVER_TIME_BUDGET,
-                message=(
-                    f"Schedule needs {schedule.get_total_duration()} min but "
-                    f"owner only has {owner.available_minutes_per_day} min."
-                ),
-                involved_items=list(schedule.items),
-            ))
-
-        # Over-budget check
-        if schedule.get_total_cost() > owner.max_daily_budget:
-            conflicts.append(ScheduleConflict(
-                conflict_type=ConflictType.OVER_COST_BUDGET,
-                message=(
-                    f"Schedule costs ${schedule.get_total_cost():.2f} but "
-                    f"daily budget is ${owner.max_daily_budget:.2f}."
-                ),
-                involved_items=list(schedule.items),
-            ))
-
-        # Duplicate task name check
-        seen_names: dict[str, ScheduleItem] = {}
-        for item in schedule.items:
-            key = item.task.name.lower()
-            if key in seen_names:
-                conflicts.append(ScheduleConflict(
-                    conflict_type=ConflictType.DUPLICATE_TASK,
-                    message=f"'{item.task.name}' appears more than once in the schedule.",
-                    involved_items=[seen_names[key], item],
-                ))
-            else:
-                seen_names[key] = item
-
-        return conflicts
-
-    def resolve_conflict(self, conflict: ScheduleConflict) -> Optional[ScheduleItem]:
-        """
-        Simple resolution: for over-budget / over-time, drop the last (lowest-priority) item.
-        Returns the removed item, or None if nothing to remove.
-        """
-        if conflict.conflict_type in (ConflictType.OVER_TIME_BUDGET, ConflictType.OVER_COST_BUDGET):
-            if conflict.involved_items:
-                return conflict.involved_items[-1]
-        return None
-
-    def explain_reasoning(self, schedule: Schedule) -> str:
-        if not schedule.items:
-            return "No tasks were scheduled."
-        lines = ["Tasks were selected and ordered as follows:"]
-        for item in schedule.items:
-            lines.append(f"  • {item.task.name}: {item.why_chosen}")
-        return "\n".join(lines)
-
-    def generate_plan(self, owner: Owner, for_date: Optional[date] = None) -> Schedule:
-        if for_date is None:
-            from datetime import date as _date
-            for_date = _date.today()
-
-        # Gather all incomplete tasks across all pets, paired with their pet
+        # 1. Collect all incomplete tasks across all pets, keeping track of which pet owns each.
         pet_task_pairs: list[tuple[Pet, Task]] = []
         for pet in owner.get_pets():
             for task in pet.get_tasks():
                 if not task.is_complete:
                     pet_task_pairs.append((pet, task))
 
-        # Sort by priority
+        reasoning_parts.append(
+            f"Collected {len(pet_task_pairs)} incomplete task(s) across "
+            f"{len(owner.get_pets())} pet(s)."
+        )
+
+        # 2. Rank by priority.
         pet_task_pairs.sort(key=lambda pt: _PRIORITY_ORDER[pt[1].priority])
+        reasoning_parts.append("Sorted tasks by priority (High → Medium → Low).")
 
-        # Fit to time budget (priority order so high-priority tasks are kept first)
-        selected: list[tuple[Pet, Task]] = []
-        total_minutes, total_cost = 0, 0.0
-        for pet, task in pet_task_pairs:
-            if (total_minutes + task.duration_minutes <= owner.available_minutes_per_day
-                    and total_cost + task.cost <= owner.max_daily_budget):
-                selected.append((pet, task))
-                total_minutes += task.duration_minutes
-                total_cost += task.cost
-
-        # Build schedule items with time slots
-        schedule = Schedule(date=for_date)
-        cursor = 8 * 60  # start at 8:00 AM
-
-        for order, (pet, task) in enumerate(selected, start=1):
-            # Use category hint if it's later than the current cursor
-            preferred = _CATEGORY_START.get(task.category, cursor)
-            start = max(cursor, preferred)
-            time_slot = _minutes_to_time_slot(start)
-            cursor = start + task.duration_minutes
-
-            why = (
-                f"Priority: {task.priority.value}. "
-                f"Fits within time ({total_minutes} min used) "
-                f"and budget (${total_cost:.2f} used)."
+        # 3. Fit to available time.
+        all_tasks = [t for _, t in pet_task_pairs]
+        kept_tasks = set(t.id for t in self.fit_to_time(all_tasks, owner.available_minutes_per_day))
+        dropped_time = [t for t in all_tasks if t.id not in kept_tasks]
+        if dropped_time:
+            names = ", ".join(t.get_full_name() for t in dropped_time)
+            reasoning_parts.append(
+                f"Dropped {len(dropped_time)} task(s) that exceeded the "
+                f"{owner.available_minutes_per_day}-minute daily limit: {names}."
             )
-            schedule.add_item(ScheduleItem(
+        pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
+
+        # 4. Fit to budget.
+        remaining_tasks = [t for _, t in pet_task_pairs]
+        kept_tasks = set(t.id for t in self.fit_to_budget(remaining_tasks, owner.max_daily_budget))
+        dropped_budget = [t for t in remaining_tasks if t.id not in kept_tasks]
+        if dropped_budget:
+            names = ", ".join(t.get_full_name() for t in dropped_budget)
+            reasoning_parts.append(
+                f"Dropped {len(dropped_budget)} task(s) that exceeded the "
+                f"${owner.max_daily_budget:.2f} daily budget: {names}."
+            )
+        pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
+
+        # 5. Assign schedule slots.
+        for order, (pet, task) in enumerate(pet_task_pairs, start=1):
+            time_slot = _CATEGORY_TIME_SLOTS.get(task.category, "12:00")
+            all_pets = [pet] + task.extra_pets
+            pet_names = " & ".join(p.get_full_name() for p in all_pets)
+            why = (
+                f"Included as a {task.priority.value}-priority "
+                f"{task.category.value} task for {pet_names}."
+            )
+            item = ScheduleItem(
                 task=task,
                 pet=pet,
                 order=order,
                 time_slot=time_slot,
                 why_chosen=why,
-            ))
+                extra_pets=task.extra_pets,
+            )
+            schedule.add_item(item)
+            if task.extra_pets:
+                reasoning_parts.append(
+                    f"'{task.get_full_name()}' is a shared task for {pet_names}."
+                )
 
-        # Detect conflicts and attach them
-        schedule.conflicts = self.detect_conflicts(schedule, owner)
+        # 6. Detect and record conflicts.
+        conflicts = self.detect_conflicts(schedule)
+        schedule.conflicts = conflicts
+        if conflicts:
+            reasoning_parts.append(
+                f"Detected {len(conflicts)} conflict(s): "
+                + "; ".join(c.message for c in conflicts)
+            )
+
+        # 7. Write plain-English reasoning.
         schedule.reasoning = self.explain_reasoning(schedule)
+        # Prepend the step-by-step notes we collected above.
+        schedule.reasoning = "\n".join(reasoning_parts) + "\n\n" + schedule.reasoning
+
         return schedule
+
+    def rank_by_priority(self, tasks: list[Task]) -> list[Task]:
+        """Return tasks sorted from highest to lowest priority."""
+        return sorted(tasks, key=lambda t: _PRIORITY_ORDER[t.priority])
+
+    def fit_to_time(self, tasks: list[Task], available_minutes: int) -> list[Task]:
+        """Return the highest-priority tasks that fit within the available minutes."""
+        ranked = self.rank_by_priority(tasks)
+        kept: list[Task] = []
+        used = 0
+        for task in ranked:
+            if used + task.duration_minutes <= available_minutes:
+                kept.append(task)
+                used += task.duration_minutes
+        return kept
+
+    def fit_to_budget(self, tasks: list[Task], max_budget: float) -> list[Task]:
+        """Return the highest-priority tasks whose total cost fits within the budget."""
+        ranked = self.rank_by_priority(tasks)
+        kept: list[Task] = []
+        spent = 0.0
+        for task in ranked:
+            if spent + task.cost <= max_budget:
+                kept.append(task)
+                spent += task.cost
+        return kept
+
+    def detect_conflicts(self, schedule: Schedule) -> list[ScheduleConflict]:
+        """Scan the schedule and return all time overlaps, location clashes, and duplicate tasks."""
+        conflicts: list[ScheduleConflict] = []
+
+        # Group items by time slot.
+        slot_map: dict[str, list[ScheduleItem]] = {}
+        for item in schedule.items:
+            slot_map.setdefault(item.time_slot, []).append(item)
+
+        for slot, group in slot_map.items():
+            if len(group) > 1:
+                # Time overlap.
+                conflicts.append(ScheduleConflict(
+                    conflict_type=ConflictType.TIME_OVERLAP,
+                    message=f"{len(group)} tasks share time slot {slot}.",
+                    involved_items=list(group),
+                ))
+                # Location clash — subset with non-empty, differing locations.
+                locations = {i.task.location for i in group if i.task.location}
+                if len(locations) > 1:
+                    conflicts.append(ScheduleConflict(
+                        conflict_type=ConflictType.LOCATION_CLASH,
+                        message=(
+                            f"Tasks at {slot} require different locations: "
+                            + ", ".join(sorted(locations))
+                        ),
+                        involved_items=list(group),
+                    ))
+
+        # Duplicate task: same (pet id, task name) pair appearing more than once.
+        seen: dict[tuple[str, str], ScheduleItem] = {}
+        for item in schedule.items:
+            key = (item.pet.id, item.task.name.lower())
+            if key in seen:
+                conflicts.append(ScheduleConflict(
+                    conflict_type=ConflictType.DUPLICATE_TASK,
+                    message=(
+                        f"'{item.task.name}' appears more than once for "
+                        f"{item.pet.get_full_name()}."
+                    ),
+                    involved_items=[seen[key], item],
+                ))
+            else:
+                seen[key] = item
+
+        return conflicts
+
+    def resolve_conflict(self, conflict: ScheduleConflict) -> ScheduleItem:
+        """Return the highest-priority item from the conflict to keep."""
+        return min(
+            conflict.involved_items,
+            key=lambda i: _PRIORITY_ORDER[i.task.priority],
+        )
+
+    def explain_reasoning(self, schedule: Schedule) -> str:
+        """Return a plain-English summary of the schedule's task count, time, cost, and conflicts."""
+        count = len(schedule.items)
+        duration = schedule.get_total_duration()
+        cost = schedule.get_total_cost()
+
+        if count == 0:
+            return "No tasks were scheduled for today."
+
+        lines = [
+            f"The plan for {schedule.date} includes {count} task(s) "
+            f"totalling {duration} minute(s) and ${cost:.2f}."
+        ]
+
+        if schedule.items:
+            high = [i for i in schedule.items if i.task.priority == Priority.HIGH]
+            if high:
+                names = ", ".join(i.task.get_full_name() for i in high)
+                lines.append(f"High-priority tasks scheduled first: {names}.")
+
+        if schedule.has_conflicts():
+            lines.append(
+                f"{len(schedule.conflicts)} conflict(s) were detected. "
+                "Review the conflicts section for suggested fixes."
+            )
+        else:
+            lines.append("No conflicts were detected.")
+
+        return " ".join(lines)

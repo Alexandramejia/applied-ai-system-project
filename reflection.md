@@ -57,6 +57,12 @@ Rather than letting users type anything freely, four fixed lists keep the data c
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
 
+Yes, the design changed during implementation. The original UML included `OVER_TIME_BUDGET` and `OVER_COST_BUDGET` as conflict types inside `ConflictType`. The idea was that the scheduler would flag it as a conflict if the total tasks exceeded the owner's available time or budget.
+
+During implementation I removed both of those conflict types and kept them as display-only totals on `Schedule` instead (`get_total_duration()` and `get_total_cost()`). The reason was that the scheduler already handles these constraints before building the plan — it uses `fit_to_time` and `fit_to_budget` to filter out tasks that won't fit. So by the time the schedule is built, it is already within the limits, making those conflict types redundant. Flagging something as a conflict that the scheduler already prevented would just add unnecessary complexity without adding value.
+
+A second design change was adding support for shared tasks — where an owner wants to do the same activity with multiple pets at the same time, like walking two dogs together or taking two pets to the vet in one trip. Instead of creating a separate `CombinedTask` class, the simpler approach was to add an `extra_pets` field directly to `Task`. If an owner wants a task shared across pets, they just pass the other pets in when creating the task. `ScheduleItem` gained a `get_all_pets()` helper so the schedule can display all pets sharing a slot in one line. The `Scheduler` reads `task.extra_pets` when building each schedule item and passes them through automatically. This kept the change small — one new field on `Task` rather than a whole new class.
+
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
