@@ -41,3 +41,20 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+
+### Testing PawPal+
+
+Run tests using:
+python -m pytest
+
+This project includes tests for:
+
+Sorting tasks by time and priority
+Detecting scheduling conflicts (tasks at the same time)
+Verifying that the scheduler generates a valid daily plan
+
+All tests passed successfully, which shows that the core features of the system are working as expected.
+
+Confidence Level: (3/5)
+Even though all tests passed, I am not fully confident in the system yet. This is the first time I have relied heavily on AI to help write a large portion of a project, so I want to be cautious. While the main features work, there may still be edge cases or scenarios that were not tested.
