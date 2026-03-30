@@ -27,9 +27,8 @@ def test_add_task_increases_count():
     assert len(pet.get_tasks()) == 1
 
 
-# ---------------------------------------------------------------------------
-# Helpers — reusable objects shared across the new tests
-# ---------------------------------------------------------------------------
+
+# Helpers 
 
 def make_pet():
     return Pet("Mochi", "Smith", "dog", "Mixed", 3)
@@ -46,11 +45,6 @@ def make_schedule_with_two_items(time_a, time_b, priority_a, priority_b):
     schedule.add_item(item_a)
     schedule.add_item(item_b)
     return schedule, item_a, item_b
-
-
-# ---------------------------------------------------------------------------
-# New tests
-# ---------------------------------------------------------------------------
 
 def test_sort_by_time():
     """sort_by_time returns items in ascending time-slot order."""

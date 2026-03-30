@@ -8,25 +8,26 @@
 - What classes did you include, and what responsibilities did 
 you assign to each?
 
-PawPal is a pet care scheduling system. The Owner who has one or more Pets. Each pet has a list of care Tasks: walks, feeding, medication, or grooming. A Scheduler reads all of that information and builds a Schedule, which is the owner's daily plan.
+PawPal is a pet care scheduling system where an Owner has one or more Pets. Each pet has a list of care Tasks such as walks, feeding, medication, or grooming. A Scheduler reads all of that information and builds a Schedule, which represents the owner's daily plan.
 
-Classes and Responsibilities: 
+Classes and Responsibilities :
 
-Owner stores the person's name, email, how many minutes they have available in a day, and their maximum daily spending limit. Everything in the system flows from the owner.
+The Owner stores the person's name, email, available minutes per day, and maximum daily budget. Everything in the system flows from the owner.
 
-Pet stores the animal's basic profile — name, species, breed, age, and notes. Each pet holds its own list of tasks.
+The Pet stores the animal’s basic profile — name, species, breed, age, and notes. Each pet maintains its own list of tasks.
 
-Task represents one care activity. It stores what the task is, how long it takes, how important it is, where it happens, how much it costs, and whether it repeats on a schedule.
+The Task represents one care activity. It stores what the task is, how long it takes, how important it is, where it happens, how much it costs, and whether it repeats.
 
-TaskManager is responsible for editing and deleting tasks. When a task repeats, it asks the owner whether they want to change just that one occurrence, that one and everything after it, or every instance of it.
+The TaskManager handles editing and deleting tasks, including recurring ones. It allows the user to choose whether to modify one instance, future instances, or all occurrences.
 
-Scheduler is the brain of the app. It takes the owner's pets and tasks, sorts them by priority, checks that everything fits within the available time and budget, spots any conflicts, and produces the final plan with an explanation of its decisions.
+The Scheduler is the main logic of the system. It collects all tasks, sorts them by priority, ensures they fit within time and budget constraints, detects conflicts, and builds the final plan with reasoning.
 
-Schedule is the finished daily plan. It holds the list of scheduled items in order, the total time, the total cost for the day, and any problems that were found.
+The Schedule represents the final daily plan. It contains the ordered tasks, total time, total cost, and any detected issues.
 
-ScheduleItem is one entry in the schedule — it records which task, which pet, what time, and why that task was included in the plan.
+A ScheduleItem represents one entry in the schedule, including the task, pet, time slot, and reasoning.
 
-ScheduleConflict captures when something goes wrong in the plan — for example two tasks at the same time, or tasks that exceed the owner's budget — and suggests what the owner can do to fix it.
+A ScheduleConflict represents issues in the plan, such as overlapping tasks or duplicate tasks, and suggests how to fix them.
+
 
 ### Initial UML Design
 
@@ -57,11 +58,9 @@ Rather than letting users type anything freely, four fixed lists keep the data c
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
 
-Yes, the design changed during implementation. The original UML included `OVER_TIME_BUDGET` and `OVER_COST_BUDGET` as conflict types inside `ConflictType`. The idea was that the scheduler would flag it as a conflict if the total tasks exceeded the owner's available time or budget.
+Initially, I included OVER_TIME_BUDGET and OVER_COST_BUDGET as conflict types. However, I removed them because the scheduler already filters tasks using fit_to_time and fit_to_budget. Since tasks that exceed limits are removed before the schedule is created, these conflicts became unnecessary.
 
-During implementation I removed both of those conflict types and kept them as display-only totals on `Schedule` instead (`get_total_duration()` and `get_total_cost()`). The reason was that the scheduler already handles these constraints before building the plan — it uses `fit_to_time` and `fit_to_budget` to filter out tasks that won't fit. So by the time the schedule is built, it is already within the limits, making those conflict types redundant. Flagging something as a conflict that the scheduler already prevented would just add unnecessary complexity without adding value.
-
-A second design change was adding support for shared tasks — where an owner wants to do the same activity with multiple pets at the same time, like walking two dogs together or taking two pets to the vet in one trip. Instead of creating a separate `CombinedTask` class, the simpler approach was to add an `extra_pets` field directly to `Task`. If an owner wants a task shared across pets, they just pass the other pets in when creating the task. `ScheduleItem` gained a `get_all_pets()` helper so the schedule can display all pets sharing a slot in one line. The `Scheduler` reads `task.extra_pets` when building each schedule item and passes them through automatically. This kept the change small — one new field on `Task` rather than a whole new class.
+Another change was adding support for shared tasks. Instead of creating a new class, I added an extra_pets field to the Task class. This allows one task to apply to multiple pets, such as walking two dogs together. The Scheduler then includes all pets when building the schedule. This approach kept the design simple while still adding useful functionality.
 
 ---
 
@@ -72,11 +71,11 @@ A second design change was adding support for shared tasks — where an owner wa
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
 - How did you decide which constraints mattered most?
 
-My scheduler considers a few main constraints: the total time available in a day, the priority of each task, and the cost of tasks. It also only looks at tasks that are not completed yet.
+My scheduler considers a few main constraints: the total time available in a day, the priority of each task, and the cost of tasks. It also only includes tasks that are not completed.
 
-The most important constraint is priority, because tasks marked as high priority should always be done first. After that, the scheduler checks if the tasks fit within the owner’s available time and budget.
+The most important constraint is priority, because high-priority tasks should always be completed first. After that, the scheduler checks if tasks fit within the available time and budget.
 
-I decided these mattered most because in real life, a pet owner would want to make sure the most important things (like feeding or medication) happen first, even if they don’t have time to do everything. The time and budget limits help make sure the plan is realistic and not overloaded.
+I chose these constraints because in real life, a pet owner would want to make sure essential tasks like feeding or medication are done first. The time and budget limits help ensure the schedule is realistic and manageable.
 
 **b. Tradeoffs**
 
@@ -98,10 +97,14 @@ This tradeoff is reasonable because the goal of the app is to help a busy pet ow
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
 - What kinds of prompts or questions were most helpful?
 
+I used AI to really explain what was going on in my code so I could get a better understanding of how everything worked. I would often ask AI to break things down step by step, and then explain it back in my own words to make sure I actually understood it. This helped me not just copy code, but learn what it was doing and why. The most helpful prompts were when I asked AI to explain logic in simple terms or to walk through how different parts of my system connected.
+
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 - How did you evaluate or verify what the AI suggested?
+
+There were also moments where I did not fully accept AI suggestions. Sometimes AI would give solutions that were too complex or added unnecessary features, including creating too many extra functions that were not really needed. This made the code harder to follow and more complicated than it had to be. Because of that, I simplified the solutions to better match my design. This helped me stay in control of the project and keep the system clean and readable.
 
 ---
 
@@ -112,10 +115,18 @@ This tradeoff is reasonable because the goal of the app is to help a busy pet ow
 - What behaviors did you test?
 - Why were these tests important?
 
+I tested the main behaviors of my system, including sorting tasks by time and priority, detecting conflicts when tasks have the same time slot, and making sure the scheduler generates a schedule when tasks are added. I also tested smaller features like marking tasks as complete and adding tasks to pets.
+
+These tests were important because they verify that the core logic of my system works correctly. Since the scheduler is the “brain” of the app, I needed to make sure it was producing correct and consistent results before relying on the UI.
+
 **b. Confidence**
 
 - How confident are you that your scheduler works correctly?
 - What edge cases would you test next if you had more time?
+
+I am somewhat confident that my scheduler works correctly because all of my tests passed successfully. However, I am not fully confident because this is my first time relying heavily on AI to build a larger project, so there may still be cases I did not think about.
+
+If I had more time, I would test more complex scenarios, such as handling many tasks at once or testing how the system behaves under different combinations of time and budget constraints.
 
 ---
 
@@ -125,10 +136,17 @@ This tradeoff is reasonable because the goal of the app is to help a busy pet ow
 
 - What part of this project are you most satisfied with?
 
+I am most satisfied with how the scheduler organizes tasks for the owner. It clearly shows what needs to be done and lays everything out in a structured way for the day. I think this makes the system useful and practical for managing pet care, especially for someone with a busy schedule.
+
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
 
+If I had another iteration, I would improve how I approached the development process. I did not like that I was working on multiple steps at the same time. I prefer to focus on one task at a time and build gradually. Because of that, I sometimes added features that were not necessary and ended up removing them later. Next time, I would plan more carefully and keep the implementation more focused.
+
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+
+One important thing I learned is that even when using AI, I still need to guide the design and make decisions about what to include. AI can generate a lot of code quickly, but it can also overcomplicate things or add unnecessary features. I learned how to simplify solutions and stay in control of the system design, which helped me better understand how everything works together.
+

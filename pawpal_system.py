@@ -12,10 +12,6 @@ from enum import Enum
 from typing import Optional
 
 
-# ---------------------------------------------------------------------------
-# Enumerations
-# ---------------------------------------------------------------------------
-
 class Priority(Enum):
     """How urgent a task is. Used to rank tasks when the schedule can't fit everything."""
     HIGH = "high"
@@ -47,10 +43,6 @@ class DeleteScope(Enum):
     THIS_AND_FUTURE = "this_and_future"
     ALL_EVENTS = "all_events"
 
-
-# ---------------------------------------------------------------------------
-# Data classes
-# ---------------------------------------------------------------------------
 
 @dataclass
 class Task:
@@ -292,10 +284,6 @@ class Schedule:
         return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# TaskManager — edit and delete tasks with recurring-scope support
-# ---------------------------------------------------------------------------
-
 class TaskManager:
     """
     Handles editing and deleting tasks, with support for recurring tasks.
@@ -305,10 +293,7 @@ class TaskManager:
     """
 
     def __init__(self, tasks: list[Task]) -> None:
-        """Accept a shared mutable task list that all manager methods operate on."""
         self._tasks = tasks
-
-    # --- helpers ---
 
     def _find(self, task_id: str) -> Optional[Task]:
         for t in self._tasks:
@@ -318,8 +303,6 @@ class TaskManager:
 
     def _group_members(self, recurrence_group_id: str) -> list[Task]:
         return [t for t in self._tasks if t.recurrence_group_id == recurrence_group_id]
-
-    # --- delete ---
 
     def delete_single(self, task_id: str) -> None:
         """Remove exactly the one task with this id."""
@@ -335,7 +318,6 @@ class TaskManager:
         if task.recurrence_group_id is None:
             self._tasks.remove(task)
             return
-        # Collect the target task index, then remove it and all later group members.
         target_index = self._tasks.index(task)
         to_remove = [
             t for i, t in enumerate(self._tasks)
@@ -349,8 +331,6 @@ class TaskManager:
         to_remove = self._group_members(recurrence_group_id)
         for t in to_remove:
             self._tasks.remove(t)
-
-    # --- edit ---
 
     def edit_single(self, task_id: str, changes: dict) -> None:
         """Apply changes to exactly the one task with this id."""
@@ -376,10 +356,6 @@ class TaskManager:
         for t in self._group_members(recurrence_group_id):
             t.edit(**changes)
 
-
-# ---------------------------------------------------------------------------
-# Scheduler — builds a daily Schedule from an Owner's pets and tasks
-# ---------------------------------------------------------------------------
 
 # Default start times assigned per task category.
 _CATEGORY_TIME_SLOTS: dict[TaskCategory, str] = {
@@ -414,7 +390,6 @@ class Scheduler:
         schedule = Schedule(date=today)
         reasoning_parts: list[str] = []
 
-        # 1. Collect all incomplete tasks across all pets, keeping track of which pet owns each.
         pet_task_pairs: list[tuple[Pet, Task]] = []
         for pet in owner.get_pets():
             for task in pet.get_tasks():
@@ -426,11 +401,9 @@ class Scheduler:
             f"{len(owner.get_pets())} pet(s)."
         )
 
-        # 2. Rank by priority.
         pet_task_pairs.sort(key=lambda pt: _PRIORITY_ORDER[pt[1].priority])
         reasoning_parts.append("Sorted tasks by priority (High → Medium → Low).")
 
-        # 3. Fit to available time.
         all_tasks = [t for _, t in pet_task_pairs]
         kept_tasks = set(t.id for t in self.fit_to_time(all_tasks, owner.available_minutes_per_day))
         dropped_time = [t for t in all_tasks if t.id not in kept_tasks]
@@ -442,7 +415,6 @@ class Scheduler:
             )
         pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
 
-        # 4. Fit to budget.
         remaining_tasks = [t for _, t in pet_task_pairs]
         kept_tasks = set(t.id for t in self.fit_to_budget(remaining_tasks, owner.max_daily_budget))
         dropped_budget = [t for t in remaining_tasks if t.id not in kept_tasks]
@@ -454,7 +426,6 @@ class Scheduler:
             )
         pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
 
-        # 5. Assign schedule slots.
         for order, (pet, task) in enumerate(pet_task_pairs, start=1):
             time_slot = _CATEGORY_TIME_SLOTS.get(task.category, "12:00")
             all_pets = [pet] + task.extra_pets
@@ -477,7 +448,6 @@ class Scheduler:
                     f"'{task.get_full_name()}' is a shared task for {pet_names}."
                 )
 
-        # 6. Detect and record conflicts.
         conflicts = self.detect_conflicts(schedule)
         schedule.conflicts = conflicts
         if conflicts:
@@ -486,9 +456,7 @@ class Scheduler:
                 + "; ".join(c.message for c in conflicts)
             )
 
-        # 7. Write plain-English reasoning.
         schedule.reasoning = self.explain_reasoning(schedule)
-        # Prepend the step-by-step notes we collected above.
         schedule.reasoning = "\n".join(reasoning_parts) + "\n\n" + schedule.reasoning
 
         return schedule
@@ -523,20 +491,17 @@ class Scheduler:
         """Scan the schedule and return all time overlaps, location clashes, and duplicate tasks."""
         conflicts: list[ScheduleConflict] = []
 
-        # Group items by time slot.
         slot_map: dict[str, list[ScheduleItem]] = {}
         for item in schedule.items:
             slot_map.setdefault(item.time_slot, []).append(item)
 
         for slot, group in slot_map.items():
             if len(group) > 1:
-                # Time overlap.
                 conflicts.append(ScheduleConflict(
                     conflict_type=ConflictType.TIME_OVERLAP,
                     message=f"{len(group)} tasks share time slot {slot}.",
                     involved_items=list(group),
                 ))
-                # Location clash — subset with non-empty, differing locations.
                 locations = {i.task.location for i in group if i.task.location}
                 if len(locations) > 1:
                     conflicts.append(ScheduleConflict(
@@ -548,7 +513,7 @@ class Scheduler:
                         involved_items=list(group),
                     ))
 
-        # Duplicate task: same (pet id, task name) pair appearing more than once.
+        # Same (pet, task name) pair appearing more than once is a duplicate.
         seen: dict[tuple[str, str], ScheduleItem] = {}
         for item in schedule.items:
             key = (item.pet.id, item.task.name.lower())
