@@ -72,10 +72,22 @@ A second design change was adding support for shared tasks — where an owner wa
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
 - How did you decide which constraints mattered most?
 
+My scheduler considers a few main constraints: the total time available in a day, the priority of each task, and the cost of tasks. It also only looks at tasks that are not completed yet.
+
+The most important constraint is priority, because tasks marked as high priority should always be done first. After that, the scheduler checks if the tasks fit within the owner’s available time and budget.
+
+I decided these mattered most because in real life, a pet owner would want to make sure the most important things (like feeding or medication) happen first, even if they don’t have time to do everything. The time and budget limits help make sure the plan is realistic and not overloaded.
+
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
+
+One tradeoff my scheduler makes is that it keeps the logic simple instead of being super accurate or complex. For example, when I added sorting by time, it just sorts based on the "HH:MM" string instead of calculating real time overlaps or durations.
+
+Also, the conflict detection only checks if tasks have the exact same time slot, not if they partially overlap. This makes it easier to understand and faster to run, but it might miss some more complicated scheduling conflicts.
+
+This tradeoff is reasonable because the goal of the app is to help a busy pet owner quickly organize their day, not create a perfect real-world calendar system. Keeping the logic simple makes the app easier to build, easier to read, and less likely to break, while still being useful for basic planning.
 
 ---
 

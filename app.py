@@ -165,6 +165,16 @@ if st.button("Generate schedule", type="primary"):
         st.success(f"Schedule built for {schedule.date}!")
 
         if schedule.items:
+            sort_mode = st.radio(
+                "Sort schedule by",
+                ["Time", "Priority"],
+                horizontal=True,
+            )
+            sorted_items = (
+                schedule.sort_by_time() if sort_mode == "Time"
+                else schedule.sort_by_priority()
+            )
+
             schedule_rows = [
                 {
                     "Order": item.order,
@@ -175,7 +185,7 @@ if st.button("Generate schedule", type="primary"):
                     "Cost": f"${item.task.cost:.2f}",
                     "Priority": item.task.priority.value,
                 }
-                for item in schedule.items
+                for item in sorted_items
             ]
             st.table(schedule_rows)
 

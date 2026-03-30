@@ -258,6 +258,14 @@ class Schedule:
         """Return True if any conflicts were detected."""
         return len(self.conflicts) > 0
 
+    def sort_by_time(self) -> list[ScheduleItem]:
+        """Return items sorted by time slot (earliest first)."""
+        return sorted(self.items, key=lambda i: i.time_slot)
+
+    def sort_by_priority(self) -> list[ScheduleItem]:
+        """Return items sorted by priority (High → Medium → Low)."""
+        return sorted(self.items, key=lambda i: _PRIORITY_ORDER[i.task.priority])
+
     def display(self) -> str:
         """Return a formatted plain-text view of the full daily schedule."""
         lines = [
