@@ -1,5 +1,6 @@
 import streamlit as st
 
+from ai_service import generate_schedule_message
 from pawpal_system import Owner, Pet, Task, Priority, TaskCategory, Scheduler
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
@@ -152,9 +153,17 @@ if st.button("Generate schedule", type="primary"):
     else:
         scheduler = Scheduler()
         st.session_state.schedule = scheduler.generate_plan(owner)
+        with st.spinner("Personalizing your schedule summary..."):
+            st.session_state.ai_message = generate_schedule_message(
+                owner, st.session_state.schedule
+            )
 
 if "schedule" in st.session_state:
     schedule = st.session_state.schedule
+
+    if st.session_state.get("ai_message"):
+        st.info(st.session_state.ai_message)
+
     st.success(f"Schedule built for {schedule.date}!")
 
     if schedule.items:

@@ -2,6 +2,7 @@
 main.py — Demo script for PawPal+ system.
 """
 
+from ai_service import generate_schedule_message
 from pawpal_system import Owner, Pet, Task, TaskCategory, Priority, Scheduler
 
 # Create owner
@@ -21,4 +22,10 @@ owner.add_pet(cat)
 
 # Generate and print today's schedule
 schedule = Scheduler().generate_plan(owner)
+
+ai_message = generate_schedule_message(owner, schedule)
+if ai_message:
+    print(ai_message)
+    print()
+
 print(schedule.display())
