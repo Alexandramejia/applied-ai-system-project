@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Optional
 
@@ -59,6 +59,7 @@ class Task:
     recurrence_group_id: Optional[str] = None
     is_recurring: bool = False
     frequency: str = ""
+    start_time: str = ""
     location: str = ""
     cost: float = 0.0
     notes: str = ""
@@ -78,7 +79,7 @@ class Task:
         name: Optional[str] = None,
         duration_minutes: Optional[int] = None,
         priority: Optional[Priority] = None,
-        location: Optional[str] = None,
+        start_time: Optional[str] = None,
         cost: Optional[float] = None,
     ) -> None:
         """Update whichever fields are provided; leave the rest unchanged."""
@@ -88,8 +89,8 @@ class Task:
             self.duration_minutes = duration_minutes
         if priority is not None:
             self.priority = priority
-        if location is not None:
-            self.location = location
+        if start_time is not None:
+            self.start_time = start_time
         if cost is not None:
             self.cost = cost
 
@@ -105,6 +106,7 @@ class Pet:
     species: str
     breed: str
     age: int
+    gender: str = "unknown"
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     notes: str = ""
     _tasks: list[Task] = field(default_factory=list, repr=False)
@@ -129,13 +131,12 @@ class Pet:
 @dataclass
 class Owner:
     """
-    The person using the app. Stores their name, email, how many minutes
+    The person using the app. Stores their name, how many minutes
     they have free each day, and their max daily spending limit.
     Everything in the system flows from the owner — they hold the list of pets.
     """
     first_name: str
     last_name: str
-    email: str
     available_minutes_per_day: int
     max_daily_budget: float
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -256,7 +257,7 @@ class Schedule:
 
     def sort_by_priority(self) -> list[ScheduleItem]:
         """Return items sorted by priority (High → Medium → Low)."""
-        return sorted(self.items, key=lambda i: _PRIORITY_ORDER[i.task.priority])
+        return sorted(self.items, key=lambda i: _PRIORITY_ORDER[i.task.priority.value])
 
     def display(self) -> str:
         """Return a formatted plain-text view of the full daily schedule."""
@@ -368,10 +369,10 @@ _CATEGORY_TIME_SLOTS: dict[TaskCategory, str] = {
     TaskCategory.ENRICHMENT:  "15:00",
 }
 
-_PRIORITY_ORDER: dict[Priority, int] = {
-    Priority.HIGH:   0,
-    Priority.MEDIUM: 1,
-    Priority.LOW:    2,
+_PRIORITY_ORDER: dict[str, int] = {
+    "high":   0,
+    "medium": 1,
+    "low":    2,
 }
 
 
@@ -401,7 +402,7 @@ class Scheduler:
             f"{len(owner.get_pets())} pet(s)."
         )
 
-        pet_task_pairs.sort(key=lambda pt: _PRIORITY_ORDER[pt[1].priority])
+        pet_task_pairs.sort(key=lambda pt: _PRIORITY_ORDER[pt[1].priority.value])
         reasoning_parts.append("Sorted tasks by priority (High → Medium → Low).")
 
         all_tasks = [t for _, t in pet_task_pairs]
@@ -427,7 +428,12 @@ class Scheduler:
         pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
 
         for order, (pet, task) in enumerate(pet_task_pairs, start=1):
-            time_slot = _CATEGORY_TIME_SLOTS.get(task.category, "12:00")
+            start = task.start_time if task.start_time else _CATEGORY_TIME_SLOTS.get(task.category, "12:00")
+            try:
+                end_dt = datetime.strptime(start, "%H:%M") + timedelta(minutes=task.duration_minutes)
+                time_slot = f"{start} – {end_dt.strftime('%H:%M')}"
+            except ValueError:
+                time_slot = start
             all_pets = [pet] + task.extra_pets
             pet_names = " & ".join(p.get_full_name() for p in all_pets)
             why = (
@@ -463,7 +469,7 @@ class Scheduler:
 
     def rank_by_priority(self, tasks: list[Task]) -> list[Task]:
         """Return tasks sorted from highest to lowest priority."""
-        return sorted(tasks, key=lambda t: _PRIORITY_ORDER[t.priority])
+        return sorted(tasks, key=lambda t: _PRIORITY_ORDER[t.priority.value])
 
     def fit_to_time(self, tasks: list[Task], available_minutes: int) -> list[Task]:
         """Return the highest-priority tasks that fit within the available minutes."""
@@ -487,31 +493,46 @@ class Scheduler:
                 spent += task.cost
         return kept
 
+    @staticmethod
+    def _parse_slot(time_slot: str) -> tuple[datetime, datetime] | None:
+        """Return (start, end) datetimes from a 'HH:MM – HH:MM' slot string, or None if unparseable."""
+        try:
+            parts = time_slot.split("–")
+            start = datetime.strptime(parts[0].strip(), "%H:%M")
+            end = datetime.strptime(parts[1].strip(), "%H:%M")
+            return start, end
+        except (ValueError, IndexError):
+            return None
+
     def detect_conflicts(self, schedule: Schedule) -> list[ScheduleConflict]:
-        """Scan the schedule and return all time overlaps, location clashes, and duplicate tasks."""
+        """Scan the schedule and return all time overlaps and duplicate tasks."""
         conflicts: list[ScheduleConflict] = []
 
-        slot_map: dict[str, list[ScheduleItem]] = {}
-        for item in schedule.items:
-            slot_map.setdefault(item.time_slot, []).append(item)
+        items = schedule.items
+        reported: set[frozenset[str]] = set()
 
-        for slot, group in slot_map.items():
-            if len(group) > 1:
-                conflicts.append(ScheduleConflict(
-                    conflict_type=ConflictType.TIME_OVERLAP,
-                    message=f"{len(group)} tasks share time slot {slot}.",
-                    involved_items=list(group),
-                ))
-                locations = {i.task.location for i in group if i.task.location}
-                if len(locations) > 1:
-                    conflicts.append(ScheduleConflict(
-                        conflict_type=ConflictType.LOCATION_CLASH,
-                        message=(
-                            f"Tasks at {slot} require different locations: "
-                            + ", ".join(sorted(locations))
-                        ),
-                        involved_items=list(group),
-                    ))
+        for i, a in enumerate(items):
+            range_a = self._parse_slot(a.time_slot)
+            if range_a is None:
+                continue
+            for b in items[i + 1:]:
+                range_b = self._parse_slot(b.time_slot)
+                if range_b is None:
+                    continue
+                a_start, a_end = range_a
+                b_start, b_end = range_b
+                if a_start < b_end and b_start < a_end:
+                    pair = frozenset([a.id, b.id])
+                    if pair not in reported:
+                        reported.add(pair)
+                        conflicts.append(ScheduleConflict(
+                            conflict_type=ConflictType.TIME_OVERLAP,
+                            message=(
+                                f"'{a.task.get_full_name()}' ({a.time_slot}) and "
+                                f"'{b.task.get_full_name()}' ({b.time_slot}) overlap."
+                            ),
+                            involved_items=[a, b],
+                        ))
 
         # Same (pet, task name) pair appearing more than once is a duplicate.
         seen: dict[tuple[str, str], ScheduleItem] = {}
@@ -535,7 +556,7 @@ class Scheduler:
         """Return the highest-priority item from the conflict to keep."""
         return min(
             conflict.involved_items,
-            key=lambda i: _PRIORITY_ORDER[i.task.priority],
+            key=lambda i: _PRIORITY_ORDER[i.task.priority.value],
         )
 
     def explain_reasoning(self, schedule: Schedule) -> str:

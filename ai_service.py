@@ -20,6 +20,14 @@ def generate_schedule_message(owner: Owner, schedule: Schedule) -> str:
     pet_names = ", ".join(
         dict.fromkeys(i.pet.first_name for i in schedule.sort_by_priority())
     )
+    _pronouns = {"male": "he/him", "female": "she/her", "unknown": "they/them"}
+    seen_pets: dict[str, object] = {}
+    for i in schedule.items:
+        seen_pets.setdefault(i.pet.id, i.pet)
+    pets_gender_info = ", ".join(
+        f"{p.first_name} ({_pronouns.get(p.gender, 'they/them')})"
+        for p in seen_pets.values()
+    )
     high_names = (
         ", ".join(i.task.get_full_name() for i in high_priority)
         if high_priority
@@ -50,14 +58,14 @@ def generate_schedule_message(owner: Owner, schedule: Schedule) -> str:
 Write a friendly, personalized daily schedule message for {owner.first_name}.
 Rules:
 - Open with: "Hi {owner.first_name}! Here's your custom schedule for {pet_names} based on your highest priority tasks and time commitment."
-- First short paragraph: mention the high-priority tasks by name and why they come first.
-- Second short paragraph: mention the most time-consuming task by name and how it fits into the {owner.available_minutes_per_day}-minute day.
+- First short paragraph: mention the high-priority tasks by name — these appear first under "✅ Today's Priorities" view (sorted high to low priority).
+- Second short paragraph: mention the most time-consuming task and how the full day flows chronologically — this reflects the "🕐 Full Day Schedule" view (sorted earliest to latest).
 - If there are conflicts, add one short sentence flagging them.
 - Close with a warm, encouraging send-off line.
 - Keep each paragraph to 2-3 sentences max. Friendly, not formal. No bullet points. No markdown headers.
 
 Owner: {owner.first_name} {owner.last_name}
-Pets scheduled today: {pet_names}
+Pets scheduled today: {pets_gender_info}
 High-priority tasks: {high_names}
 Most time-consuming task: {longest_name}
 Total time: {schedule.get_total_duration()} min (budget: {owner.available_minutes_per_day} min)
@@ -71,11 +79,11 @@ Full task list:
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt,
             )
             return response.text.strip()
-        except Exception:
-            return ""
+        except Exception as e:
+            return f"__error__:{e}"
 
-    return ""
+    return "__error__:GEMINI_API_KEY is not set in your .env file."

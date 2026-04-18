@@ -6,11 +6,11 @@ from ai_service import generate_schedule_message
 from pawpal_system import Owner, Pet, Task, TaskCategory, Priority, Scheduler
 
 # Create owner
-owner = Owner("Jake", "Rivera", "jake@example.com", available_minutes_per_day=180, max_daily_budget=200.0)
+owner = Owner("Jake", "Rivera", available_minutes_per_day=180, max_daily_budget=200.0)
 
 # Create two pets
-dog = Pet("Biscuit", "Rivera", "Dog", "Golden Retriever", 4)
-cat = Pet("Mochi", "Rivera", "Cat", "Siamese", 2)
+dog = Pet("Biscuit", "Rivera", "Dog", "Golden Retriever", 4, gender="male")
+cat = Pet("Mochi", "Rivera", "Cat", "Siamese", 2, gender="female")
 
 # Add tasks with different durations
 dog.add_task(Task("Morning walk", TaskCategory.WALK, Priority.HIGH, duration_minutes=30, cost=0.0))
