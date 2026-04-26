@@ -95,15 +95,6 @@ python -m pytest tests/
 
 **Output:**
 
-Schedule table (sorted by priority):
-
-| Time | Task | Pet(s) | Min | Cost | Priority |
-|---|---|---|---|---|---|
-| 8:00 AM – 8:30 AM | Walk: Morning walk | Mochi Smith | 30 | $0.00 | 🟠 high |
-| 8:35 AM – 8:45 AM | Feeding: Breakfast | Mochi Smith | 10 | $0.00 | 🟠 high |
-| 10:00 AM – 10:20 AM | Enrichment: Enrichment puzzle | Mochi Smith | 20 | $0.00 | 🟡 medium |
-| 5:00 PM – 5:30 PM | Walk: Evening walk | Mochi Smith | 30 | $0.00 | 🟡 medium |
-
 AI Summary:
 ```
 Hi Jordan! Here's your custom schedule for Mochi based on your highest
@@ -119,8 +110,8 @@ gaps. Have a great day with Mochi!
 ### Example 2 — Two pets with a time conflict
 
 **Input:**
-- Pet 1: Mochi — Walk: Morning walk at 9:00 AM, 30 min
-- Pet 2: Biscuit (Golden Retriever, age 4) — Vet: Vet visit at 9:00 AM, 45 min
+- Pet 1: Mochi — Walk: Morning walk High priority, 9:00 AM, 30 min
+- Pet 2: Biscuit (Golden Retriever, age 4) — Vet: Vet visit High priority, 9:00 AM, 45 min
 
 **Output:**
 

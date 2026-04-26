@@ -3,13 +3,14 @@ ai_service.py — Gemini-powered friendly schedule summary for PawPal+
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
 
 from pawpal_system import Owner, Priority, Schedule
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 
 def generate_schedule_message(owner: Owner, schedule: Schedule) -> str:
@@ -79,7 +80,7 @@ Full task list:
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash-lite",
                 contents=prompt,
             )
             return response.text.strip()

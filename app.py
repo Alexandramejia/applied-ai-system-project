@@ -64,26 +64,33 @@ st.subheader("Add a Pet")
 with st.form("add_pet_form"):
     col1, col2 = st.columns(2)
     with col1:
-        pet_first = st.text_input("First name", value="Mochi")
+        pet_first = st.text_input("First name")
         pet_species = st.selectbox("Species", ["dog", "cat", "rabbit", "bird", "other"])
         pet_age = st.number_input("Age (years)", min_value=0, max_value=30, value=2)
     with col2:
-        pet_last = st.text_input("Last name", value="Smith")
-        pet_breed = st.text_input("Breed", value="Mixed")
+        pet_last = st.text_input("Last name", value=owner.last_name)
+        pet_breed = st.text_input("Breed")
         pet_gender = st.selectbox("Gender", ["male", "female", "unknown"])
 
     if st.form_submit_button("Add pet"):
-        new_pet = Pet(
-            first_name=pet_first,
-            last_name=pet_last,
-            species=pet_species,
-            breed=pet_breed,
-            age=int(pet_age),
-            gender=pet_gender,
-        )
-        owner.add_pet(new_pet)
-        st.session_state.schedule_stale = True
-        st.rerun()
+        if not pet_first.strip():
+            st.error("Please enter a first name for the pet.")
+        else:
+            new_pet = Pet(
+                first_name=pet_first.strip(),
+                last_name=pet_last.strip(),
+                species=pet_species,
+                breed=pet_breed.strip(),
+                age=int(pet_age),
+                gender=pet_gender,
+            )
+            owner.add_pet(new_pet)
+            st.session_state.owner = owner
+            st.session_state.pop("schedule", None)
+            st.session_state.pop("ai_message", None)
+            st.session_state.schedule_stale = True
+            st.toast(f"{new_pet.first_name} added!")
+            st.rerun()
 
 st.divider()
 
@@ -96,7 +103,9 @@ else:
     st.subheader("Your Pets")
 
     for pet in pets:
-        with st.expander(f"🐾 {pet.get_full_name()} — {pet.species}, age {pet.age}"):
+        task_count = len(pet.get_tasks())
+        task_label = f"{task_count} task{'s' if task_count != 1 else ''}" if task_count else "⚠️ no tasks yet"
+        with st.expander(f"🐾 {pet.get_full_name()} — {pet.species}, age {pet.age} · {task_label}"):
             tasks = pet.get_tasks()
 
             if tasks:
@@ -112,6 +121,9 @@ else:
                     with col_btn:
                         if st.button("Remove", key=f"remove_task_{t.id}"):
                             pet.remove_task(t.id)
+                            st.session_state.owner = owner
+                            st.session_state.pop("schedule", None)
+                            st.session_state.pop("ai_message", None)
                             st.session_state.schedule_stale = True
                             st.rerun()
             else:
@@ -164,14 +176,18 @@ else:
                         start_time=start_time_24,
                     )
                     pet.add_task(new_task)
+                    st.session_state.owner = owner
+                    st.session_state.pop("schedule", None)
+                    st.session_state.pop("ai_message", None)
                     st.session_state.schedule_stale = True
-                    st.session_state.ai_message = ""
                     st.rerun()
 
             if st.button("Remove this pet", key=f"remove_{pet.id}"):
                 owner.remove_pet(pet.id)
+                st.session_state.owner = owner
+                st.session_state.pop("schedule", None)
+                st.session_state.pop("ai_message", None)
                 st.session_state.schedule_stale = True
-                st.session_state.ai_message = ""
                 st.rerun()
 
 st.divider()
@@ -188,6 +204,11 @@ sort_mode = st.radio("View schedule as", ["✅ Today's Priorities", "🕐 Full D
 
 if st.session_state.get("schedule_stale") and "schedule" in st.session_state:
     st.warning("Your pets or tasks changed — regenerate the schedule to include all updates.")
+
+pets_without_tasks = [p for p in pets if not p.get_tasks()]
+if pets_without_tasks:
+    names = ", ".join(p.first_name for p in pets_without_tasks)
+    st.warning(f"These pets have no tasks yet and won't appear in the schedule: **{names}**. Open their section above and click 'Add task'.")
 
 if st.button("Generate schedule", type="primary"):
     if not pets:
@@ -248,6 +269,13 @@ if "schedule" in st.session_state:
                 st.warning(f"Suggested fix: {conflict.suggest_fix()}")
     else:
         st.info("No tasks fit within the current time/budget constraints.")
+        if schedule.has_conflicts():
+            st.divider()
+            st.subheader("Conflict Details")
+            for conflict in schedule.conflicts:
+                label = conflict.conflict_type.value.replace("_", " ").title()
+                st.error(f"**{label}** — {conflict.message}")
+                st.warning(f"Suggested fix: {conflict.suggest_fix()}")
 
     with st.expander("Reasoning"):
         st.text(schedule.reasoning)

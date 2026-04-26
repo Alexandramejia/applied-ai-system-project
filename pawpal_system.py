@@ -35,6 +35,8 @@ class ConflictType(Enum):
     TIME_OVERLAP = "time_overlap"
     LOCATION_CLASH = "location_clash"
     DUPLICATE_TASK = "duplicate_task"
+    TIME_LIMIT_EXCEEDED = "time_limit_exceeded"
+    BUDGET_EXCEEDED = "budget_exceeded"
 
 
 class DeleteScope(Enum):
@@ -66,6 +68,9 @@ class Task:
     is_complete: bool = False
     extra_pets: list[Pet] = field(default_factory=list, repr=False)
 
+    def __post_init__(self) -> None:
+        self.name = self.name.strip()
+
     def get_full_name(self) -> str:
         """Return a display name combining the category and task name."""
         return f"{self.category.value.capitalize()}: {self.name}"
@@ -84,7 +89,7 @@ class Task:
     ) -> None:
         """Update whichever fields are provided; leave the rest unchanged."""
         if name is not None:
-            self.name = name
+            self.name = name.strip()
         if duration_minutes is not None:
             self.duration_minutes = duration_minutes
         if priority is not None:
@@ -218,6 +223,16 @@ class ScheduleConflict:
             return (
                 f"Duplicate task detected ({names}). Remove one occurrence or "
                 f"adjust its recurrence settings."
+            )
+        if self.conflict_type == ConflictType.TIME_LIMIT_EXCEEDED:
+            return (
+                "Increase your available minutes per day in Owner Settings, "
+                "or reduce the duration of this task."
+            )
+        if self.conflict_type == ConflictType.BUDGET_EXCEEDED:
+            return (
+                "Increase your daily budget in Owner Settings, "
+                "or reduce the cost of this task."
             )
         return "Review the conflicting items and adjust the schedule manually."
 
@@ -405,26 +420,49 @@ class Scheduler:
         pet_task_pairs.sort(key=lambda pt: _PRIORITY_ORDER[pt[1].priority.value])
         reasoning_parts.append("Sorted tasks by priority (High → Medium → Low).")
 
+        task_to_pet = {t.id: p for p, t in pet_task_pairs}
         all_tasks = [t for _, t in pet_task_pairs]
         kept_tasks = set(t.id for t in self.fit_to_time(all_tasks, owner.available_minutes_per_day))
         dropped_time = [t for t in all_tasks if t.id not in kept_tasks]
+        time_conflicts: list[ScheduleConflict] = []
         if dropped_time:
             names = ", ".join(t.get_full_name() for t in dropped_time)
             reasoning_parts.append(
                 f"Dropped {len(dropped_time)} task(s) that exceeded the "
                 f"{owner.available_minutes_per_day}-minute daily limit: {names}."
             )
+            for task in dropped_time:
+                pet = task_to_pet[task.id]
+                time_conflicts.append(ScheduleConflict(
+                    conflict_type=ConflictType.TIME_LIMIT_EXCEEDED,
+                    message=(
+                        f"'{task.get_full_name()}' for {pet.get_full_name()} "
+                        f"({task.duration_minutes} min) was dropped — your "
+                        f"{owner.available_minutes_per_day}-min daily limit was reached."
+                    ),
+                ))
         pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
 
         remaining_tasks = [t for _, t in pet_task_pairs]
         kept_tasks = set(t.id for t in self.fit_to_budget(remaining_tasks, owner.max_daily_budget))
         dropped_budget = [t for t in remaining_tasks if t.id not in kept_tasks]
+        budget_conflicts: list[ScheduleConflict] = []
         if dropped_budget:
             names = ", ".join(t.get_full_name() for t in dropped_budget)
             reasoning_parts.append(
                 f"Dropped {len(dropped_budget)} task(s) that exceeded the "
                 f"${owner.max_daily_budget:.2f} daily budget: {names}."
             )
+            for task in dropped_budget:
+                pet = task_to_pet[task.id]
+                budget_conflicts.append(ScheduleConflict(
+                    conflict_type=ConflictType.BUDGET_EXCEEDED,
+                    message=(
+                        f"'{task.get_full_name()}' for {pet.get_full_name()} "
+                        f"(${task.cost:.2f}) was dropped — your "
+                        f"${owner.max_daily_budget:.2f} daily budget was reached."
+                    ),
+                ))
         pet_task_pairs = [(p, t) for p, t in pet_task_pairs if t.id in kept_tasks]
 
         for order, (pet, task) in enumerate(pet_task_pairs, start=1):
@@ -454,7 +492,7 @@ class Scheduler:
                     f"'{task.get_full_name()}' is a shared task for {pet_names}."
                 )
 
-        conflicts = self.detect_conflicts(schedule)
+        conflicts = self.detect_conflicts(schedule) + time_conflicts + budget_conflicts
         schedule.conflicts = conflicts
         if conflicts:
             reasoning_parts.append(
