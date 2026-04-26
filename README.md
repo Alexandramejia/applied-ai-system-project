@@ -183,7 +183,7 @@ Rather than accepting all input at once, the app guides the owner through adding
 The scheduler sorts by priority before considering time slots. High-priority tasks (feeding, medication) are always placed first. This reflects real-world pet care needs where some tasks are non-negotiable regardless of when they occur.
 
 **Conflict detection scope:**
-The conflict detector flags tasks with the same time slot (exact match). Partial overlaps — where one task ends a few minutes into another — are not currently detected. This is a deliberate simplification: the goal is a practical planning aid, not a strict calendar validator. When a conflict is found, the AI suggests a resolution — typically recommending which task to reschedule or shorten. In cases where time or budget limits make a task impossible to fit, the scheduler drops it from the plan entirely and the AI summary explains what was left out and why.
+The conflict detector flags tasks with the same time slot (exact match). Partial overlaps — where one task ends a few minutes into another — are not currently detected. This is a deliberate simplification: the goal is a practical planning aid, not a strict calendar validator. When a conflict is found, the AI suggests a resolution — typically recommending which task to reschedule or shorten. In cases where time or budget limits make a task impossible to fit, the scheduler drops it from the plan entirely; the reasoning log below the schedule shows which tasks were cut and why.
 
 **Shared tasks via `extra_pets`:**
 Rather than creating a new class for tasks shared across multiple pets (e.g., walking two dogs together), I added an `extra_pets` field to `Task`. This kept the design clean while supporting the feature without over-engineering it.
@@ -210,7 +210,7 @@ All six tests passed. The biggest lesson from testing was how important edge cas
 
 ## Reflection
 
-> For a deeper look at testing, confidence scoring, error handling, and ethics, see the [Model Card](model_card.md).
+> For a deeper look at testing, error handling, and ethics, see the [Model Card](model_card.md).
 
 This project taught me that building an AI system is less about writing one clever function and more about carefully managing the relationships between many small pieces. Every class has to behave predictably on its own, and then the connections between them have to be just as deliberate. This is also why edge cases matter since they expose where those relationships break down.
 
