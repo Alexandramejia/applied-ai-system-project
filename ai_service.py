@@ -16,7 +16,7 @@ def generate_schedule_message(owner: Owner, schedule: Schedule) -> str:
     """Return a warm, personalized schedule summary from Gemini, with local fallback."""
     api_key = os.getenv("GEMINI_API_KEY")
 
-    high_priority = [i for i in schedule.items if i.task.priority == Priority.HIGH]
+    high_priority = [i for i in schedule.items if i.task.priority.value == "high"]
     pet_names = ", ".join(
         dict.fromkeys(i.pet.first_name for i in schedule.sort_by_priority())
     )
@@ -83,7 +83,29 @@ Full task list:
                 contents=prompt,
             )
             return response.text.strip()
-        except Exception as e:
-            return f"__error__:{e}"
+        except Exception:
+            pass
 
-    return "__error__:GEMINI_API_KEY is not set in your .env file."
+    return _fallback_summary(owner, schedule, pet_names, high_names, longest_name)
+
+
+def _fallback_summary(owner, schedule, pet_names: str, high_names: str, longest_name: str) -> str:
+    """Build a plain-text schedule summary without the AI model."""
+    total_min = schedule.get_total_duration()
+    total_cost = schedule.get_total_cost()
+    lines = [
+        f"Hi {owner.first_name}! Here's your schedule for {pet_names}.",
+        "",
+        f"High-priority tasks today: {high_names}.",
+        f"Most time-consuming task: {longest_name}.",
+        f"Total time: {total_min} min | Total cost: ${total_cost:.2f}.",
+    ]
+    if schedule.has_conflicts():
+        lines.append(f"⚠️ {len(schedule.conflicts)} conflict(s) detected — please review before your day starts.")
+    else:
+        lines.append("No scheduling conflicts — you're all set!")
+    lines += ["", "Here's your full day, in order:"]
+    for item in schedule.sort_by_time():
+        cost_str = f" (${item.task.cost:.2f})" if item.task.cost > 0 else ""
+        lines.append(f"  {item.time_slot} — {item.task.get_full_name()} for {item.pet.first_name}{cost_str}")
+    return "\n".join(lines)

@@ -165,11 +165,13 @@ else:
                     )
                     pet.add_task(new_task)
                     st.session_state.schedule_stale = True
+                    st.session_state.ai_message = ""
                     st.rerun()
 
             if st.button("Remove this pet", key=f"remove_{pet.id}"):
                 owner.remove_pet(pet.id)
                 st.session_state.schedule_stale = True
+                st.session_state.ai_message = ""
                 st.rerun()
 
 st.divider()
@@ -203,9 +205,7 @@ if "schedule" in st.session_state:
     schedule = st.session_state.schedule
 
     ai_msg = st.session_state.get("ai_message", "")
-    if ai_msg.startswith("__error__:"):
-        st.warning(f"AI summary unavailable: {ai_msg.removeprefix('__error__:')}")
-    elif ai_msg:
+    if ai_msg:
         st.info(ai_msg)
 
     st.success(f"Schedule built for {schedule.date}!")
