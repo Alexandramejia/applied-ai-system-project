@@ -112,23 +112,35 @@ and an evening walk. Have a great day with Mochi!
 - Owner: Jordan Smith, 120 min/day, $50 budget
 - Pet 1: Mochi (Mixed breed dog, age 3)
   - Walk: Morning walk — High priority, 30 min, 9:00 AM
+  - Grooming: Brush coat — Medium priority, 15 min, 11:00 AM
 - Pet 2: Biscuit (Golden Retriever, age 4)
   - Vet: Vet visit — High priority, 45 min, 9:00 AM
+  - Feeding: Lunch — Medium priority, 10 min, 12:00 PM
 
 **Output:**
 
-*The exact wording will vary each time the AI runs, but the summary generally names the pets, identifies the high-priority tasks, and walks through the day's schedule. When a conflict is detected, a warning banner also appears and the AI summary explains the overlap.*
+*The exact wording will vary each time the AI runs, but the summary generally names the pets, identifies the high-priority tasks, and walks through the day's schedule.*
+
+```
+Here's today's plan for Mochi and Biscuit, Jordan. Your high-priority tasks
+are Walk: Morning walk and Vet: Vet visit, scheduled first to cover the
+essentials for both pets. Today's schedule also includes Grooming: Brush coat
+for Mochi and Feeding: Lunch for Biscuit. Have a great day with both pets!
+```
+
+After the AI summary, the conflict warning appears above the schedule table:
 
 ```
 ⚠️ 1 conflict detected — see details below the table.
 ```
 
+Below the table, the conflict is explained:
+
 ```
-Here's today's plan for Mochi and Biscuit, Jordan. Your high-priority tasks
-are Walk: Morning walk and Vet: Vet visit. A time conflict was detected —
-both tasks are scheduled at 9:00 AM and cannot run at the same time.
-Consider rescheduling one to a different slot so both pets get their care
-completed today.
+Conflict Details
+
+Time Overlap — 'Walk: Morning walk' (09:00 – 09:30) and 'Vet: Vet visit' (09:00 – 09:45) overlap.
+Suggested fix: Reschedule one of the overlapping tasks (Walk: Morning walk and Vet: Vet visit) to a different time slot, or shorten its duration.
 ```
 
 ---
