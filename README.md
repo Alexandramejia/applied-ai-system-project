@@ -87,7 +87,6 @@ python -m pytest tests/
 **Input:**
 - Owner: Jordan Smith, 120 min/day, $50 budget
 - Pet: Mochi (Mixed breed dog, age 3)
-- Tasks added:
   - Walk: Morning walk — High priority, 30 min, 8:00 AM
   - Feeding: Breakfast — High priority, 10 min, 8:35 AM
   - Enrichment: Enrichment puzzle — Medium priority, 20 min, 10:00 AM
@@ -95,14 +94,14 @@ python -m pytest tests/
 
 **Output:**
 
-AI Summary:
+*The exact wording will vary each time the AI runs, but the summary generally names the pet, identifies the high-priority tasks, and walks through the day's schedule.*
+
 ```
-Hi Jordan! Here's your custom schedule for Mochi based on your highest
-priority tasks and time commitment. Your high-priority tasks — Walk: Morning
-walk and Feeding: Breakfast — are set to start the day, making sure Mochi's
-essentials are covered first. Walk: Morning walk is your most time-consuming
-task at 30 minutes, and your day flows nicely from morning to evening with no
-gaps. Have a great day with Mochi!
+Hi Jordan! Here's today's care plan for Mochi. Your high-priority tasks are
+Walk: Morning walk and Feeding: Breakfast, so those are scheduled first to
+make sure the essentials are covered. Today's schedule runs from 8:00 AM
+through 5:00 PM and includes a morning walk, breakfast, an enrichment puzzle,
+and an evening walk. Have a great day with Mochi!
 ```
 
 ---
@@ -110,21 +109,26 @@ gaps. Have a great day with Mochi!
 ### Example 2 — Two pets with a time conflict
 
 **Input:**
-- Pet 1: Mochi — Walk: Morning walk High priority, 9:00 AM, 30 min
-- Pet 2: Biscuit (Golden Retriever, age 4) — Vet: Vet visit High priority, 9:00 AM, 45 min
+- Owner: Jordan Smith, 120 min/day, $50 budget
+- Pet 1: Mochi (Mixed breed dog, age 3)
+  - Walk: Morning walk — High priority, 30 min, 9:00 AM
+- Pet 2: Biscuit (Golden Retriever, age 4)
+  - Vet: Vet visit — High priority, 45 min, 9:00 AM
 
 **Output:**
 
-The schedule is still generated and displayed, but a conflict banner appears at the top and the details are shown below the table:
+*The exact wording will vary each time the AI runs, but the summary generally names the pets, identifies the high-priority tasks, and walks through the day's schedule. When a conflict is detected, a warning banner also appears and the AI summary explains the overlap.*
 
 ```
 ⚠️ 1 conflict detected — see details below the table.
+```
 
-[Time Overlap]
-'Walk: Morning walk' (09:00 – 09:30) and 'Vet: Vet visit' (09:00 – 09:45) overlap.
-
-Suggested fix: Reschedule one of the overlapping tasks (Walk: Morning walk
-and Vet: Vet visit) to a different time slot, or shorten its duration.
+```
+Here's today's plan for Mochi and Biscuit, Jordan. Your high-priority tasks
+are Walk: Morning walk and Vet: Vet visit. A time conflict was detected —
+both tasks are scheduled at 9:00 AM and cannot run at the same time.
+Consider rescheduling one to a different slot so both pets get their care
+completed today.
 ```
 
 ---
@@ -132,13 +136,29 @@ and Vet: Vet visit) to a different time slot, or shorten its duration.
 ### Example 3 — Adding a second pet after the first schedule runs
 
 **Input:**
-- Step 1: Add Mochi with three tasks → click Generate Schedule → AI summary appears.
-- Step 2: Add Biscuit with two new tasks → app shows "Your pets or tasks changed — regenerate the schedule."
-- Step 3: Click Generate Schedule again.
+- Owner: Jordan Smith, 120 min/day, $50 budget
+- Step 1 — Add Mochi (Mixed breed dog, age 3):
+  - Walk: Morning walk — High priority, 30 min, 8:00 AM
+  - Feeding: Breakfast — High priority, 10 min, 8:35 AM
+  - Enrichment: Enrichment puzzle — Medium priority, 20 min, 10:00 AM
+  → Click Generate Schedule
+- Step 2 — Add Biscuit (Golden Retriever, age 4):
+  - Vet: Checkup — High priority, 45 min, 9:00 AM
+  - Walk: Afternoon walk — Medium priority, 25 min, 3:00 PM
+  → App shows "Your pets or tasks changed — regenerate the schedule."
+- Step 3 → Click Generate Schedule again.
 
 **Output:**
 
-The scheduler re-runs across both pets and produces a combined schedule. Tasks are re-sorted by priority across the full set, and any new conflicts between the two pets are detected and listed. The AI summary refreshes to reflect both pets. This demonstrates that the system correctly re-reads all pet data on each run rather than caching a stale single-pet result.
+*The exact wording will vary each time the AI runs, but the summary generally names the pets, identifies the high-priority tasks, and walks through the day's schedule.*
+
+```
+Here's the updated care plan for Mochi and Biscuit, Jordan. Your
+high-priority tasks are Walk: Morning walk, Feeding: Breakfast, and
+Vet: Checkup, so those are scheduled first. Today's schedule runs from
+8:00 AM through 3:00 PM and covers all five tasks across both pets.
+Have a great day with Mochi and Biscuit!
+```
 
 ---
 
@@ -151,7 +171,7 @@ Rather than accepting all input at once, the app guides the owner through adding
 The scheduler sorts by priority before considering time slots. High-priority tasks (feeding, medication) are always placed first. This reflects real-world pet care needs where some tasks are non-negotiable regardless of when they occur.
 
 **Conflict detection scope:**
-The conflict detector flags tasks with the same time slot (exact match). Partial overlaps — where one task ends a few minutes into another — are not currently detected. This is a deliberate simplification: the goal is a practical planning aid, not a strict calendar validator.
+The conflict detector flags tasks with the same time slot (exact match). Partial overlaps — where one task ends a few minutes into another — are not currently detected. This is a deliberate simplification: the goal is a practical planning aid, not a strict calendar validator. When a conflict is found, the AI suggests a resolution — typically recommending which task to reschedule or shorten. In cases where time or budget limits make a task impossible to fit, the scheduler drops it from the plan entirely and the AI summary explains what was left out and why.
 
 **Shared tasks via `extra_pets`:**
 Rather than creating a new class for tasks shared across multiple pets (e.g., walking two dogs together), I added an `extra_pets` field to `Task`. This kept the design clean while supporting the feature without over-engineering it.
@@ -172,7 +192,7 @@ Tests are in [tests/test_pawpal.py](tests/test_pawpal.py) and cover:
 - `test_conflict_detected_for_same_time_slot` — Verifies a `TIME_OVERLAP` conflict is raised when two tasks share a slot.
 - `test_scheduler_generates_items_for_owner_with_pet_and_task` — End-to-end check that the scheduler produces a valid plan.
 
-All six tests passed. The biggest lesson from testing was how important edge cases are. When I introduced a second pet, I had to ensure the scheduler re-read both pets' tasks and correctly detected cross-pet conflicts — behavior that hadn't been considered in the original single-pet design. Catching this through testing rather than in production was a clear example of why thorough test coverage matters.
+All six tests passed. The biggest lesson from testing was how important edge cases are. When I introduced a second pet, I had to ensure the scheduler re-read both pets' tasks and correctly detected cross-pet conflicts — behavior that hadn't been considered in the original single-pet design. Catching this through testing rather than in production was a clear example of why thorough test coverage matters. Edge cases like overlapping time slots and budget overruns also revealed an important behavior: the AI doesn't just flag the problem, it actively suggests what to do (e.g., which task to reschedule or shorten) and will sometimes drop a task altogether when there is no way to fit it within the given constraints.
 
 ---
 
