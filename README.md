@@ -187,6 +187,8 @@ All six tests passed. The biggest lesson from testing was how important edge cas
 
 ## Reflection
 
+> For a deeper look at testing, confidence scoring, error handling, and ethics, see the [Model Card](model_card.md).
+
 This project taught me that building an AI system is less about writing one clever function and more about carefully managing the relationships between many small pieces. Every class has to behave predictably on its own, and then the connections between them have to be just as deliberate. This is also why edge cases matter since they expose where those relationships break down.
 
 Working with AI tools during development reinforced that lesson. AI can generate code quickly, but it can also overcomplicate things, like adding functions and edge cases that weren't needed and making the system harder to follow. I learned to use AI as a collaborator I could interrogate and simplify, not a source of final answers. Asking it to explain code step by step, then restating that explanation in my own words, helped me stay in genuine control of the design. The biggest shift in my thinking was realizing that clarity and simplicity are features — a scheduler that handles the real use case cleanly is more valuable than one that handles every hypothetical case messily.
